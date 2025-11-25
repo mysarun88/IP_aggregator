@@ -34,8 +34,8 @@ jobs:
         run: |
           git config --global user.name 'GitHub Action'
           git config --global user.email 'action@github.com'
-          # Add the data folder (adjust if your script saves elsewhere)
-          git add data_exports/*.csv
+          # Add the data folder AND the database file to persistence
+          git add data_exports/*.csv threat_intel.db
           # Commit if there are changes
           git commit -m "Daily Threat Intel Update: $(date +'%Y-%m-%d')" || echo "No changes to commit"
           git push
