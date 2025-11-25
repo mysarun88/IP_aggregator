@@ -6,6 +6,8 @@ import time
 import pandas as pd
 import os
 import csv
+import sys
+import stat  # Added for file permission security
 from datetime import datetime
 from collections import defaultdict
 from ipwhois import IPWhois
@@ -25,7 +27,8 @@ FEEDS = [
     {"name": "Feodo Tracker", "url": "https://feodotracker.abuse.ch/downloads/ipblocklist.txt"},
     {"name": "ThreatFox", "url": "https://threatfox.abuse.ch/export/csv/ip-port/recent/"},
     {"name": "URLHaus", "url": "https://urlhaus.abuse.ch/downloads/hostfile/"},
-    {"name": "Emerging Threats", "url": "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"}
+    {"name": "Emerging Threats", "url": "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"},
+    {"name": "FireHOL Level 1", "url": "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"}
 ]
 
 HOSTING_KEYWORDS = [
@@ -39,12 +42,11 @@ IP_PATTERN = re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
 # --- Database Management ---
 
 def init_db():
-    """Initializes DB and handles schema migrations safely."""
+    """Initializes DB, handles schema migrations, and secures the file."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
     # 1. Create Tables (if they don't exist)
-    # Note: SQLite ignores this if table exists, even if columns are missing.
     c.execute('''
         CREATE TABLE IF NOT EXISTS ips (
             ip_address TEXT PRIMARY KEY,
@@ -76,16 +78,22 @@ def init_db():
     ''')
     
     # 2. Schema Migration: Check for 'sources' column
-    # This prevents "OperationalError: no such column: sources"
     try:
         c.execute("SELECT sources FROM ips LIMIT 1")
     except sqlite3.OperationalError:
-        # Column doesn't exist, so we add it
         print("[-] Performing Schema Migration: Adding 'sources' column...")
         c.execute("ALTER TABLE ips ADD COLUMN sources TEXT")
         
     conn.commit()
     conn.close()
+
+    # 3. Security: Restrict file permissions to owner only (chmod 600)
+    try:
+        if os.path.exists(DB_FILE):
+            os.chmod(DB_FILE, stat.S_IRUSR | stat.S_IWUSR)
+            print(f"[*] Secured database file permissions for {DB_FILE}")
+    except Exception as e:
+        print(f"[!] Warning: Could not set secure permissions on DB: {e}")
 
 def get_existing_ips():
     """Returns a set of all IPs currently in the DB."""
@@ -95,7 +103,6 @@ def get_existing_ips():
         c.execute("SELECT ip_address FROM ips")
         ips = {row[0] for row in c.fetchall()}
     except sqlite3.OperationalError:
-        # Fallback if table doesn't exist yet
         ips = set()
     conn.close()
     return ips
@@ -124,27 +131,31 @@ def update_ip_sources(ip, new_sources):
     conn.close()
 
 def insert_new_ip(data, sources):
-    """Inserts a completely new IP record."""
+    """Inserts a completely new IP record and commits immediately."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     source_str = ", ".join(sorted(sources))
     
-    # Ensure 'sources' is included in the insert
-    c.execute('''
-        INSERT INTO ips (
-            ip_address, first_seen, last_seen, sources,
-            asn, isp_name, country, city, hostname, host_type, 
-            risk_level, abuse_contact, cidr, asn_registry, updated_date
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        data['IP'], now, now, source_str,
-        data.get('ASN'), data.get('ISP_Name'), data.get('Country'), data.get('City'),
-        data.get('Hostname'), data.get('Host_Type'), data.get('Risk_Level'),
-        data.get('Abuse_Contact'), data.get('CIDR'), data.get('ASN_Registry'), data.get('Updated_Date')
-    ))
-    conn.commit()
-    conn.close()
+    try:
+        c.execute('''
+            INSERT INTO ips (
+                ip_address, first_seen, last_seen, sources,
+                asn, isp_name, country, city, hostname, host_type, 
+                risk_level, abuse_contact, cidr, asn_registry, updated_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data['IP'], now, now, source_str,
+            data.get('ASN'), data.get('ISP_Name'), data.get('Country'), data.get('City'),
+            data.get('Hostname'), data.get('Host_Type'), data.get('Risk_Level'),
+            data.get('Abuse_Contact'), data.get('CIDR'), data.get('ASN_Registry'), data.get('Updated_Date')
+        ))
+        conn.commit() # <--- Data is saved here, per IP
+    except sqlite3.IntegrityError:
+        # If IP was added by another process in the milliseconds between check and insert
+        update_ip_sources(data['IP'], sources)
+    finally:
+        conn.close()
 
 # --- Parsing & Enrichment ---
 
@@ -232,6 +243,53 @@ def process_in_batches(ip_list, batch_size=10, sleep_time=2):
         yield batch
         if i + batch_size < total:
             time.sleep(sleep_time)
+
+def run_forensic_analysis(new_ips, aggregated_data, batch_size=10, sleep_time=2):
+    """
+    Runs the enrichment process with live status updates (Current IP, Progress, ETA).
+    """
+    total_ips = len(new_ips)
+    if total_ips == 0:
+        print("[-] No new IPs to analyze.")
+        return
+
+    print(f"[*] Starting forensic analysis for {total_ips} IPs...")
+    start_time = time.time()
+    processed_count = 0
+
+    # Using the batch processor to handle rate limiting sleeps
+    for batch in process_in_batches(new_ips, batch_size, sleep_time):
+        for ip in batch:
+            # Calculate ETA
+            elapsed_time = time.time() - start_time
+            if processed_count > 0:
+                avg_time = elapsed_time / processed_count
+                remaining = total_ips - processed_count
+                eta_seconds = int(avg_time * remaining)
+                eta_str = str(datetime.utcfromtimestamp(eta_seconds).strftime('%H:%M:%S'))
+            else:
+                eta_str = "Calculating..."
+
+            # Live Status Line (Overwrites previous line)
+            status_msg = (
+                f"    -> Analyzing: {ip:<15} | "
+                f"Left: {total_ips - processed_count:<5} | "
+                f"ETA: {eta_str}   "
+            )
+            sys.stdout.write("\r" + status_msg)
+            sys.stdout.flush()
+
+            try:
+                enriched = enrich_ip(ip)
+                # This inserts and commits immediately.
+                insert_new_ip(enriched, aggregated_data[ip])
+            except Exception as e:
+                sys.stdout.write(f"\n[!] Error processing {ip}: {e}\n")
+
+            processed_count += 1
+    
+    total_time = time.time() - start_time
+    print(f"\n[+] Analysis complete. Total run time: {str(datetime.utcfromtimestamp(total_time).strftime('%H:%M:%S'))}")
 
 def export_to_github_repo():
     """Exports DB to CSV and commits to Git."""
