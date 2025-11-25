@@ -9,7 +9,7 @@ import csv
 from datetime import datetime
 from collections import defaultdict
 from ipwhois import IPWhois
-from git import Repo, GitCommandError  # Requires: pip install gitpython
+from git import Repo, GitCommandError
 
 # --- Configuration ---
 DB_FILE = "threat_intel.db"
@@ -39,11 +39,12 @@ IP_PATTERN = re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
 # --- Database Management ---
 
 def init_db():
-    """Initializes DB with the Source Column."""
+    """Initializes DB and handles schema migrations safely."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
-    # Main Entity Table
+    # 1. Create Tables (if they don't exist)
+    # Note: SQLite ignores this if table exists, even if columns are missing.
     c.execute('''
         CREATE TABLE IF NOT EXISTS ips (
             ip_address TEXT PRIMARY KEY,
@@ -64,7 +65,6 @@ def init_db():
         )
     ''')
     
-    # Sightings Table (Event Log)
     c.execute('''
         CREATE TABLE IF NOT EXISTS sightings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,6 +75,15 @@ def init_db():
         )
     ''')
     
+    # 2. Schema Migration: Check for 'sources' column
+    # This prevents "OperationalError: no such column: sources"
+    try:
+        c.execute("SELECT sources FROM ips LIMIT 1")
+    except sqlite3.OperationalError:
+        # Column doesn't exist, so we add it
+        print("[-] Performing Schema Migration: Adding 'sources' column...")
+        c.execute("ALTER TABLE ips ADD COLUMN sources TEXT")
+        
     conn.commit()
     conn.close()
 
@@ -82,8 +91,12 @@ def get_existing_ips():
     """Returns a set of all IPs currently in the DB."""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT ip_address FROM ips")
-    ips = {row[0] for row in c.fetchall()}
+    try:
+        c.execute("SELECT ip_address FROM ips")
+        ips = {row[0] for row in c.fetchall()}
+    except sqlite3.OperationalError:
+        # Fallback if table doesn't exist yet
+        ips = set()
     conn.close()
     return ips
 
@@ -97,7 +110,8 @@ def update_ip_sources(ip, new_sources):
     
     current_sources = set()
     if row and row[0]:
-        current_sources = set(row[0].split(", "))
+        # Handle potential empty or malformed source strings
+        current_sources = set(s.strip() for s in row[0].split(",") if s.strip())
     
     # Add new sources
     current_sources.update(new_sources)
@@ -116,6 +130,7 @@ def insert_new_ip(data, sources):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     source_str = ", ".join(sorted(sources))
     
+    # Ensure 'sources' is included in the insert
     c.execute('''
         INSERT INTO ips (
             ip_address, first_seen, last_seen, sources,
@@ -140,12 +155,10 @@ def fetch_feeds():
     
     for feed in FEEDS:
         try:
-            # print(f"    Fetching {feed['name']}...")
             r = requests.get(feed['url'], timeout=10)
             if r.status_code == 200:
                 ips = set(IP_PATTERN.findall(r.text))
                 for ip in ips:
-                    # Filter out local IPs or versions
                     if not ip.startswith(('127.', '10.', '192.168.')): 
                         aggregated[ip].add(feed['name'])
         except Exception as e:
@@ -173,8 +186,6 @@ def enrich_ip(ip):
     # 2. RDAP/Whois
     try:
         obj = IPWhois(ip)
-        # depth=1 fetches specific org data. 
-        # retry_count=1 to fail fast if server is blocking us.
         res = obj.lookup_rdap(depth=1, retry_count=1)
         
         data['ASN'] = res.get('asn', 'Unknown')
@@ -184,7 +195,7 @@ def enrich_ip(ip):
         
         network = res.get('network', {})
         data['CIDR'] = network.get('cidr', 'Unknown')
-        data['Updated_Date'] = network.get('updated', 'Unknown') # When was this block last changed?
+        data['Updated_Date'] = network.get('updated', 'Unknown')
         data['City'] = network.get('city', 'Unknown')
 
         # Extract Abuse Contact
@@ -230,23 +241,24 @@ def export_to_github_repo():
     today = datetime.now().strftime('%Y-%m-%d')
     filename = os.path.join(DATA_DIR, f"threat_intel_{today}.csv")
     
-    # Dump DB to CSV
     conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql_query("SELECT * FROM ips", conn)
-    conn.close()
+    try:
+        df = pd.read_sql_query("SELECT * FROM ips", conn)
+    except Exception:
+        return "Error reading DB."
+    finally:
+        conn.close()
     
     if df.empty:
         return "No data to export."
         
     df.to_csv(filename, index=False)
     
-    # Git Operations
     try:
-        repo = Repo('.')  # Initialize repo object for current dir
+        repo = Repo('.') 
         repo.index.add([filename])
         repo.index.commit(f"Daily Threat Intel Update: {today}")
-        # Uncomment the next line if you have a remote configured and keys set up
-        # repo.remotes.origin.push() 
-        return f"Exported {filename} and committed to local git."
+        # repo.remotes.origin.push() # Uncomment if keys are configured
+        return f"Exported {filename}."
     except Exception as e:
         return f"Exported CSV but Git failed: {e}"
