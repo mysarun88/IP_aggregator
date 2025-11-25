@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
+import os
+import hashlib
 from threat_utils import (
     init_db, 
     DB_FILE, 
@@ -19,7 +21,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Ensure DB exists on load
+# Ensure DB exists and is secured on load
 init_db()
 
 st.title("🛡️ Threat Intel Database & Analyzer")
@@ -53,11 +55,48 @@ col1.metric("Total Unique IPs", total_ips)
 col2.metric("Updated Last 24h", recent_ips)
 col3.metric("High/Critical Risk", high_risk)
 
+# --- Sidebar Configuration ---
+with st.sidebar:
+    st.header("Configuration")
+    
+    with st.expander("⚙️ Settings"):
+        max_ips = st.slider("Analysis Limit (Manual)", 10, 10000, 10000)
+        worker_threads = st.slider("Worker Threads", 1, 30, 15)
+
+    st.divider()
+    st.subheader("⚠️ Danger Zone")
+    
+    # Secure Wipe Functionality
+    with st.expander("Reset Database"):
+        st.warning("This will permanently delete all threat intelligence data.")
+        admin_pass = st.text_input("Enter Admin Password", type="password")
+        
+        if st.button("🗑️ Wipe Data", type="secondary"):
+            # Hardcoded SHA256 hash for "admin123"
+            # To change password: hashlib.sha256("your_password".encode()).hexdigest()
+            SECURE_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+            
+            input_hash = hashlib.sha256(admin_pass.encode()).hexdigest()
+            
+            if input_hash == SECURE_HASH:
+                try:
+                    if os.path.exists(DB_FILE):
+                        os.remove(DB_FILE)
+                        init_db() # Re-initialize immediately to set permissions
+                        st.success("Database wiped and re-initialized securely.")
+                        st.rerun()
+                    else:
+                        st.warning("Database file not found.")
+                except Exception as e:
+                    st.error(f"Error deleting DB: {e}")
+            else:
+                st.error("Incorrect Password.")
+
 # --- Manual Run Control ---
 with st.expander("⚙️ Manual Scan Control"):
     st.write("Run the scan logic manually. (This is usually done automatically by the 5 AM script)")
     
-    if st.button("Run Full Scan Now"):
+    if st.button("Run Full Scan Now", type="primary"):
         status = st.status("Fetching Feeds...", expanded=True)
         
         # 1. Fetch
