@@ -8,3 +8,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 151.252.84.225,2025-11-26 10:43:31,2025-11-26 10:43:31,"GreenSnow, IPSum Level 3",30855,"TELE-PLUS-AS, RU",RU,Unknown,151.252.84.225.ip.tele-plus.ru,Residential/ISP,Moderate (Res),abuse@tele-plus.ru,151.252.84.0/24,ripencc,Unknown
 156.236.74.199,2025-11-26 10:43:33,2025-11-26 10:43:33,"GreenSnow, IPSum Level 3",138152,"YISUCLOUDLTD-HK YISU CLOUD LTD, HK",SC,Unknown,Unknown,Cloud/Hosting,High (Cloud),Unknown,156.236.74.0/24,afrinic,Unknown
 101.47.162.20,2025-11-26 10:43:34,2025-11-26 10:43:34,"GreenSnow, IPSum Level 3",150436,"BYTEPLUS-AS-AP Byteplus Pte. Ltd., SG",SG,Unknown,Unknown,Residential/ISP,Moderate (Res),bd_abuse@bytedance.com,"101.47.112.0/20, 101.47.128.0/17",apnic,Unknown
+62.60.131.17,2025-11-26 10:43:36,2025-11-26 10:43:36,"GreenSnow, IPSum Level 3",208137,"FPS12, RO",IR,Unknown,Unknown,Residential/ISP,Moderate (Res),admin@feoprest.life,62.60.131.0/24,ripencc,Unknown
