@@ -26,7 +26,7 @@ st.set_page_config(
 # --- SECURITY CONFIGURATION ---
 # Paste your GitHub Fine-Grained Token (starts with github_pat_...) inside the quotes below.
 # REQUIRED PERMISSIONS: Repository -> 'Contents' must be set to 'Read and write'.
-HARDCODED_TOKEN = "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"  
+HARDCODED_TOKEN = ""  
 
 # Ensure CSV exists
 init_storage()
@@ -169,7 +169,7 @@ with st.expander("⚙️ Manual Scan Control", expanded=True):
                 
             # 4. Analyze New
             if new_ips:
-                CHUNK_SIZE = 100
+                CHUNK_SIZE = 1
                 total_chunks = (len(new_ips) // CHUNK_SIZE) + 1
                 
                 for i in range(0, len(new_ips), CHUNK_SIZE):
@@ -231,3 +231,4 @@ if os.path.exists(STORAGE_FILE) and os.path.getsize(STORAGE_FILE) > 0:
     )
 else:
     st.info("Database is empty.")
+
