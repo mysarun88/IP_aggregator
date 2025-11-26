@@ -10,7 +10,8 @@ from threat_utils import (
     enrich_ip, 
     update_ip_sources, 
     insert_new_ip, 
-    process_in_batches
+    process_in_batches,
+    export_to_github_repo
 )
 
 # --- Page Configuration ---
@@ -132,7 +133,18 @@ with st.expander("⚙️ Manual Scan Control"):
                 processed_count += len(batch)
                 progress_bar_new.progress(min(processed_count / len(new_ips), 1.0))
                 
+                # Commit to GitHub every 100 entries
+                if processed_count % 100 == 0:
+                    status.write(f"Processed {processed_count} IPs. Committing CSV to GitHub...")
+                    git_msg = export_to_github_repo()
+                    status.write(f"GitHub: {git_msg}")
+                
             progress_bar_new.empty()
+            
+            # Final commit for any remaining entries
+            status.write("Finalizing commit...")
+            final_msg = export_to_github_repo()
+            status.write(f"Final GitHub Commit: {final_msg}")
             
         status.update(label="Scan Complete", state="complete", expanded=False)
         st.rerun()
