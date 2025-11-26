@@ -263,7 +263,7 @@ def run_forensic_analysis(new_ips, aggregated_data, batch_size=10, sleep_time=2)
     print(f"\n[+] Analysis complete. Total run time: {str(datetime.utcfromtimestamp(total_time).strftime('%H:%M:%S'))}")
 
 def export_to_github_repo():
-    """Commits the storage CSV to Git."""
+    """Commits the storage CSV to Git with Authentication handling."""
     
     # We are now using the main STORAGE_FILE as the primary record
     if not os.path.exists(STORAGE_FILE):
@@ -278,8 +278,20 @@ def export_to_github_repo():
         today = datetime.now().strftime('%Y-%m-%d')
         repo.index.commit(f"Daily Threat Intel Update (CSV): {today}")
         
-        # Pushing changes to remote
+        # Pushing changes to remote with Authentication
         origin = repo.remotes.origin
+        
+        # Check for GITHUB_TOKEN env var (Used in Streamlit Cloud Secrets / Actions)
+        github_token = os.environ.get('GITHUB_TOKEN')
+        
+        if github_token:
+            # Construct Authenticated URL: https://<TOKEN>@github.com/user/repo.git
+            # This avoids the interactive password prompt
+            current_url = origin.url
+            if "https://" in current_url and "@" not in current_url:
+                auth_url = current_url.replace("https://", f"https://{github_token}@")
+                origin.set_url(auth_url)
+        
         origin.push()
         
         return f"Committed and Pushed {STORAGE_FILE} to Git."
