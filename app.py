@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import hashlib
+from git import Repo  # Added for direct Git configuration
 from threat_utils import (
     init_storage, 
     STORAGE_FILE, 
@@ -23,9 +24,9 @@ st.set_page_config(
 )
 
 # --- SECURITY CONFIGURATION ---
-# Paste your GitHub Token inside the quotes below to hardcode it.
-# WARNING: Do not commit this file to a public repo with the token inside.
-HARDCODED_TOKEN = "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"  
+# Paste your GitHub Fine-Grained Token (starts with github_pat_...) inside the quotes below.
+# REQUIRED PERMISSIONS: Repository -> 'Contents' must be set to 'Read and write'.
+HARDCODED_TOKEN = "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"  
 
 # Ensure CSV exists
 init_storage()
@@ -67,7 +68,7 @@ with st.sidebar:
             os.environ["GITHUB_TOKEN"] = HARDCODED_TOKEN
             st.success("✅ GitHub Token loaded from script.")
         else:
-            gh_token = st.text_input("GitHub Token", type="password", help="Required for Git Push.")
+            gh_token = st.text_input("GitHub Token", type="password", help="Required for Git Push. Fine-grained tokens supported.")
             if gh_token:
                 os.environ["GITHUB_TOKEN"] = gh_token
 
@@ -102,6 +103,28 @@ with st.expander("⚙️ Manual Scan Control", expanded=True):
     
     if st.button("Run Full Scan Now", type="primary"):
         
+        # --- AUTO-FIX GIT URL ---
+        # This forces the Git Remote URL to use the token with 'oauth2' username
+        # preventing the "Could not read password" error.
+        if os.environ.get("GITHUB_TOKEN"):
+            try:
+                repo = Repo('.')
+                origin = repo.remotes.origin
+                url = origin.url
+                # Clean existing auth if present
+                if "@" in url:
+                    url = "https://" + url.split("@")[-1]
+                
+                # Inject Token
+                token = os.environ["GITHUB_TOKEN"]
+                # Using 'oauth2' as username is a standard trick for PATs (Classic and Fine-Grained)
+                new_url = url.replace("https://", f"https://oauth2:{token}@")
+                origin.set_url(new_url)
+                st.toast("✅ Git Remote Configured with Token")
+            except Exception as e:
+                st.error(f"Failed to configure Git: {e}")
+        # -----------------------
+
         # --- UI Logging Setup ---
         log_container = st.container()
         with log_container:
