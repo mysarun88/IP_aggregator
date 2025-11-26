@@ -11,7 +11,8 @@ from threat_utils import (
     update_ip_sources, 
     insert_new_ip, 
     process_in_batches,
-    export_to_github_repo
+    export_to_github_repo,
+    run_forensic_analysis
 )
 
 # --- Page Configuration ---
@@ -87,67 +88,75 @@ with st.sidebar:
                 st.error("Incorrect Password.")
 
 # --- Manual Run Control ---
-with st.expander("⚙️ Manual Scan Control"):
+with st.expander("⚙️ Manual Scan Control", expanded=True):
     st.write("Run the scan logic manually.")
     
     if st.button("Run Full Scan Now", type="primary"):
-        status = st.status("Fetching Feeds...", expanded=True)
         
-        # 1. Fetch
-        aggregated_data = fetch_feeds()
-        status.write(f"Found {len(aggregated_data)} unique IPs.")
-        
-        # 2. Identify New vs Old
-        existing_ips = get_existing_ips()
-        new_ips = [ip for ip in aggregated_data if ip not in existing_ips]
-        old_ips = [ip for ip in aggregated_data if ip in existing_ips]
-        
-        status.write(f"New IPs: {len(new_ips)} | Existing IPs: {len(old_ips)}")
-        
-        # 3. Update Old
-        if old_ips:
-            status.write("Updating existing records (CSV rewrite)...")
-            progress_bar_old = st.progress(0)
-            # Note: Bulk updating CSV row-by-row is slow. 
-            # For 1000+ IPs, this might lag.
-            for i, ip in enumerate(old_ips):
-                update_ip_sources(ip, aggregated_data[ip])
-                if i % 50 == 0: 
-                    progress_bar_old.progress(min((i + 1) / len(old_ips), 1.0))
-            progress_bar_old.empty()
+        # --- UI Logging Setup ---
+        log_container = st.container()
+        with log_container:
+            st.markdown("### Live Execution Log")
+            status_text = st.empty()
+            log_history_box = st.empty()
             
-        # 4. Analyze New
-        if new_ips:
-            status.write("Analyzing new IPs...")
-            progress_bar_new = st.progress(0)
-            processed_count = 0
+        log_history = []
+        
+        def ui_logger(msg):
+            """Callback passed to threat_utils to update UI."""
+            # Heuristic: If it looks like a progress update line, replace the status text
+            # otherwise append to the history log
+            if "Analyzing:" in msg or "ETA:" in msg:
+                status_text.markdown(f"`{msg}`")
+            else:
+                log_history.append(msg)
+                # Keep last 15 lines for context
+                log_history_box.code("\n".join(log_history[-15:]))
+
+        # --- Execution ---
+        with st.spinner("Running Scan... Check logs below."):
+            # 1. Fetch
+            aggregated_data = fetch_feeds(log_callback=ui_logger)
+            ui_logger(f"Total unique IPs found: {len(aggregated_data)}")
             
-            for batch in process_in_batches(new_ips, batch_size=10, sleep_time=1):
-                for ip in batch:
-                    try:
-                        enriched_data = enrich_ip(ip)
-                        insert_new_ip(enriched_data, aggregated_data[ip])
-                    except Exception as e:
-                        print(f"Error: {e}")
+            # 2. Identify New vs Old
+            existing_ips = get_existing_ips()
+            new_ips = [ip for ip in aggregated_data if ip not in existing_ips]
+            old_ips = [ip for ip in aggregated_data if ip in existing_ips]
+            
+            ui_logger(f"New IPs to Analyze: {len(new_ips)}")
+            ui_logger(f"Existing IPs to Update: {len(old_ips)}")
+            
+            # 3. Update Old
+            if old_ips:
+                ui_logger("Updating existing records...")
+                progress_bar_old = st.progress(0)
+                for i, ip in enumerate(old_ips):
+                    update_ip_sources(ip, aggregated_data[ip])
+                    if i % 50 == 0: 
+                        progress_bar_old.progress(min((i + 1) / len(old_ips), 1.0))
+                progress_bar_old.empty()
                 
-                processed_count += len(batch)
-                progress_bar_new.progress(min(processed_count / len(new_ips), 1.0))
+            # 4. Analyze New (Uses the improved run_forensic_analysis with callback)
+            if new_ips:
+                # We break the new_ips into chunks of 100 for git commits
+                CHUNK_SIZE = 100
+                total_chunks = (len(new_ips) // CHUNK_SIZE) + 1
                 
-                # Commit to GitHub every 100 entries
-                if processed_count % 100 == 0:
-                    status.write(f"Processed {processed_count} IPs. Committing CSV to GitHub...")
+                for i in range(0, len(new_ips), CHUNK_SIZE):
+                    chunk = new_ips[i : i + CHUNK_SIZE]
+                    ui_logger(f"Processing Batch {i}-{i+len(chunk)}...")
+                    
+                    # Run analysis on this chunk
+                    run_forensic_analysis(chunk, aggregated_data, batch_size=10, sleep_time=1, log_callback=ui_logger)
+                    
+                    # Commit this chunk
+                    ui_logger(f"Committing batch results to GitHub...")
                     git_msg = export_to_github_repo()
-                    status.write(f"GitHub: {git_msg}")
-                
-            progress_bar_new.empty()
-            
-            # Final commit for any remaining entries
-            status.write("Finalizing commit...")
-            final_msg = export_to_github_repo()
-            status.write(f"Final GitHub Commit: {final_msg}")
-            
-        status.update(label="Scan Complete", state="complete", expanded=False)
-        st.rerun()
+                    ui_logger(f"GitHub: {git_msg}")
+
+            ui_logger("Scan Complete.")
+            st.success("Scan Finished Successfully.")
 
 # --- Data Viewer ---
 st.divider()
