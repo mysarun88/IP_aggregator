@@ -45,3 +45,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 114.220.238.30,2025-11-26 10:49:19,2025-11-26 10:49:19,"GreenSnow, IPSum Level 3",4134,"CHINANET-BACKBONE No.31,Jin-rong Street, CN",CN,Unknown,Unknown,Residential/ISP,Moderate (Res),anti-spam@chinatelecom.cn,114.216.0.0/13,apnic,Unknown
 84.247.181.144,2025-11-26 10:49:21,2025-11-26 10:49:21,"GreenSnow, IPSum Level 3",51167,"CONTABO, DE",DE,Unknown,vmd127695.contaboserver.net,Residential/ISP,Moderate (Res),abuse@contabo.de,84.247.160.0/19,ripencc,Unknown
 172.183.229.221,2025-11-26 10:49:23,2025-11-26 10:49:23,GreenSnow,8075,"MICROSOFT-CORP-MSN-AS-BLOCK, US",GB,Unknown,Unknown,Cloud/Hosting,High (Cloud),abuse@microsoft.com,172.183.0.0/16,ripencc,Unknown
+14.103.112.100,2025-11-26 10:49:28,2025-11-26 10:49:28,"GreenSnow, IPSum Level 3",4811 137718,,CN,Unknown,Unknown,Residential/ISP,Moderate (Res),gnoc@bytedance.com,14.103.0.0/16,apnic,Unknown
