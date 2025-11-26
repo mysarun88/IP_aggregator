@@ -278,9 +278,10 @@ def export_to_github_repo():
         today = datetime.now().strftime('%Y-%m-%d')
         repo.index.commit(f"Daily Threat Intel Update (CSV): {today}")
         
-        # Push if remote is configured
-        # repo.remotes.origin.push() 
+        # Pushing changes to remote
+        origin = repo.remotes.origin
+        origin.push()
         
-        return f"Committed {STORAGE_FILE} to Git."
+        return f"Committed and Pushed {STORAGE_FILE} to Git."
     except Exception as e:
         return f"Git Operation failed: {e}"
