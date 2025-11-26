@@ -45,6 +45,14 @@ CSV_COLUMNS = [
     'abuse_contact', 'cidr', 'asn_registry', 'updated_date'
 ]
 
+# --- Helper: Logging ---
+def log_msg(msg, callback=None):
+    """Sends log to callback if exists, else prints to stdout."""
+    if callback:
+        callback(msg)
+    else:
+        print(msg)
+
 # --- Storage Management (CSV) ---
 
 def init_storage():
@@ -149,13 +157,13 @@ def get_daily_raw_path():
         os.makedirs(path)
     return path
 
-def fetch_feeds():
+def fetch_feeds(log_callback=None):
     """
     Checks for local raw files for today. 
     If missing, downloads from source and saves to 'raw_feeds/YYYY-MM-DD/'.
     Returns dict: {ip: [source1, source2]}
     """
-    print("[-] Checking/Fetching feeds...")
+    log_msg("[-] Checking/Fetching feeds...", log_callback)
     aggregated = defaultdict(set)
     date_path = get_daily_raw_path()
     
@@ -166,16 +174,16 @@ def fetch_feeds():
         
         # 1. Try to read from local Git storage first
         if os.path.exists(file_path):
-            print(f"    [+] Reading cached: {feed['name']}")
+            log_msg(f"    [+] Reading cached: {feed['name']}", log_callback)
             try:
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
             except Exception as e:
-                print(f"    [!] Error reading cache {file_path}: {e}")
+                log_msg(f"    [!] Error reading cache {file_path}: {e}", log_callback)
         
         # 2. Download if not found
         else:
-            print(f"    [+] Downloading: {feed['name']}...")
+            log_msg(f"    [+] Downloading: {feed['name']}...", log_callback)
             try:
                 r = requests.get(feed['url'], timeout=15)
                 if r.status_code == 200:
@@ -184,9 +192,9 @@ def fetch_feeds():
                     with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(content)
                 else:
-                    print(f"    [!] Failed to fetch {feed['name']} (Status {r.status_code})")
+                    log_msg(f"    [!] Failed to fetch {feed['name']} (Status {r.status_code})", log_callback)
             except Exception as e:
-                print(f"    [!] Failed to fetch {feed['name']}: {e}")
+                log_msg(f"    [!] Failed to fetch {feed['name']}: {e}", log_callback)
 
         # 3. Parse IPs from content
         if content:
@@ -263,14 +271,14 @@ def process_in_batches(ip_list, batch_size=10, sleep_time=2):
         if i + batch_size < total:
             time.sleep(sleep_time)
 
-def run_forensic_analysis(new_ips, aggregated_data, batch_size=10, sleep_time=2):
+def run_forensic_analysis(new_ips, aggregated_data, batch_size=10, sleep_time=2, log_callback=None):
     """Runs enrichment and appends to CSV with live status."""
     total_ips = len(new_ips)
     if total_ips == 0:
-        print("[-] No new IPs to analyze.")
+        log_msg("[-] No new IPs to analyze.", log_callback)
         return
 
-    print(f"[*] Starting forensic analysis for {total_ips} IPs...")
+    log_msg(f"[*] Starting forensic analysis for {total_ips} IPs...", log_callback)
     start_time = time.time()
     processed_count = 0
 
@@ -291,21 +299,27 @@ def run_forensic_analysis(new_ips, aggregated_data, batch_size=10, sleep_time=2)
                 f"Left: {total_ips - processed_count:<5} | "
                 f"ETA: {eta_str}   "
             )
-            sys.stdout.write("\r" + status_msg)
-            sys.stdout.flush()
+            
+            # For UI, we pass this status message
+            if log_callback:
+                log_callback(status_msg)
+            else:
+                sys.stdout.write("\r" + status_msg)
+                sys.stdout.flush()
 
             try:
                 enriched = enrich_ip(ip)
                 insert_new_ip(enriched, aggregated_data[ip])
             except Exception as e:
-                sys.stdout.write(f"\n[!] Error processing {ip}: {e}\n")
+                err_msg = f"\n[!] Error processing {ip}: {e}\n"
+                log_msg(err_msg, log_callback)
 
             processed_count += 1
     
     total_time = time.time() - start_time
-    print(f"\n[+] Analysis complete. Total run time: {str(datetime.utcfromtimestamp(total_time).strftime('%H:%M:%S'))}")
+    log_msg(f"\n[+] Analysis complete. Total run time: {str(datetime.utcfromtimestamp(total_time).strftime('%H:%M:%S'))}", log_callback)
 
-def export_to_github_repo():
+def export_to_github_repo(log_callback=None):
     """Commits the storage CSV and Raw Data folder to Git with Authentication handling."""
     
     # We are now using the main STORAGE_FILE as the primary record
