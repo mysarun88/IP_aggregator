@@ -22,6 +22,11 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- SECURITY CONFIGURATION ---
+# Paste your GitHub Token inside the quotes below to hardcode it.
+# WARNING: Do not commit this file to a public repo with the token inside.
+HARDCODED_TOKEN = "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"  
+
 # Ensure CSV exists
 init_storage()
 
@@ -34,15 +39,10 @@ high_risk = 0
 
 if os.path.exists(STORAGE_FILE) and os.path.getsize(STORAGE_FILE) > 0:
     try:
-        # Read strictly what we need to avoid massive memory usage on load
         df_stats = pd.read_csv(STORAGE_FILE, usecols=['ip_address', 'last_seen', 'risk_level'])
-        
         total_ips = len(df_stats)
-        
-        # Convert last_seen to datetime for filtering
         df_stats['last_seen'] = pd.to_datetime(df_stats['last_seen'], errors='coerce')
         recent_ips = len(df_stats[df_stats['last_seen'] > (pd.Timestamp.now() - pd.Timedelta(days=1))])
-        
         high_risk = len(df_stats[
             df_stats['risk_level'].astype(str).str.contains('High', case=False) | 
             df_stats['risk_level'].astype(str).str.contains('Critical', case=False)
@@ -59,8 +59,17 @@ col3.metric("High/Critical Risk", high_risk)
 with st.sidebar:
     st.header("Configuration")
     
-    with st.expander("⚙️ Settings"):
+    with st.expander("⚙️ Settings", expanded=True):
         worker_threads = st.slider("Worker Threads", 1, 50, 10)
+        
+        # Token Handling Logic
+        if HARDCODED_TOKEN:
+            os.environ["GITHUB_TOKEN"] = HARDCODED_TOKEN
+            st.success("✅ GitHub Token loaded from script.")
+        else:
+            gh_token = st.text_input("GitHub Token", type="password", help="Required for Git Push.")
+            if gh_token:
+                os.environ["GITHUB_TOKEN"] = gh_token
 
     st.divider()
     st.subheader("⚠️ Danger Zone")
@@ -104,8 +113,6 @@ with st.expander("⚙️ Manual Scan Control", expanded=True):
         
         def ui_logger(msg):
             """Callback passed to threat_utils to update UI."""
-            # Heuristic: If it looks like a progress update line, replace the status text
-            # otherwise append to the history log
             if "Analyzing:" in msg or "ETA:" in msg:
                 status_text.markdown(f"`{msg}`")
             else:
@@ -137,15 +144,14 @@ with st.expander("⚙️ Manual Scan Control", expanded=True):
                         progress_bar_old.progress(min((i + 1) / len(old_ips), 1.0))
                 progress_bar_old.empty()
                 
-            # 4. Analyze New (Uses the improved run_forensic_analysis with callback)
+            # 4. Analyze New
             if new_ips:
-                # We break the new_ips into chunks of 100 for git commits
                 CHUNK_SIZE = 100
                 total_chunks = (len(new_ips) // CHUNK_SIZE) + 1
                 
                 for i in range(0, len(new_ips), CHUNK_SIZE):
                     chunk = new_ips[i : i + CHUNK_SIZE]
-                    ui_logger(f"Processing Batch {i}-{i+len(chunk)}...")
+                    ui_logger(f"Processing Batch {i}-{min(i+len(chunk), len(new_ips))}...")
                     
                     # Run analysis on this chunk
                     run_forensic_analysis(chunk, aggregated_data, batch_size=10, sleep_time=1, log_callback=ui_logger)
@@ -182,7 +188,7 @@ if os.path.exists(STORAGE_FILE) and os.path.getsize(STORAGE_FILE) > 0:
     if risk_filter != "All":
         df = df[df['risk_level'].astype(str).str.contains(risk_filter, case=False)]
 
-    # Dynamic Source Counts (calculated on fly from sources string)
+    # Dynamic Source Counts
     df['Source_Count'] = df['sources'].astype(str).apply(lambda x: len(x.split(',')) if x != 'nan' else 0)
     
     # Display
