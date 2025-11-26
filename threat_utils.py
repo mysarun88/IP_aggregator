@@ -1,371 +1,210 @@
-import requests
-import re
-import socket
-import time
+import streamlit as st
 import pandas as pd
 import os
-import sys
-import stat
-from datetime import datetime
-from collections import defaultdict
-from ipwhois import IPWhois
-from git import Repo, GitCommandError
+import hashlib
+from threat_utils import (
+    init_storage, 
+    STORAGE_FILE, 
+    fetch_feeds, 
+    get_existing_ips, 
+    enrich_ip, 
+    update_ip_sources, 
+    insert_new_ip, 
+    process_in_batches,
+    export_to_github_repo,
+    run_forensic_analysis
+)
 
-# --- Configuration ---
-STORAGE_FILE = "threat_intel.csv"
-RAW_DATA_DIR = "raw_feeds" # Directory for raw daily downloads
-DATA_DIR = "data_exports" 
+# --- Page Configuration ---
+st.set_page_config(
+    page_title="Threat Intel DB (CSV)", 
+    page_icon="🛡️", 
+    layout="wide"
+)
 
-# Expanded Feed List
-FEEDS = [
-    {"name": "Blocklist.de (RDP)", "url": "https://lists.blocklist.de/lists/rdp.txt"},
-    {"name": "GreenSnow", "url": "http://blocklist.greensnow.co/greensnow.txt"},
-    {"name": "CINS Army", "url": "http://cinsscore.com/list/ci-badguys.txt"},
-    {"name": "IPSum Level 3", "url": "https://raw.githubusercontent.com/stamparm/ipsum/master/levels/3.txt"},
-    {"name": "DigitalSide MISP", "url": "https://osint.digitalside.it/Threat-Intel/lists/latestips.txt"},
-    {"name": "Feodo Tracker", "url": "https://feodotracker.abuse.ch/downloads/ipblocklist.txt"},
-    {"name": "ThreatFox", "url": "https://threatfox.abuse.ch/export/csv/ip-port/recent/"},
-    {"name": "URLHaus", "url": "https://urlhaus.abuse.ch/downloads/hostfile/"},
-    {"name": "Emerging Threats", "url": "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"},
-    {"name": "FireHOL Level 1", "url": "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"}
-]
+# --- SECURITY CONFIGURATION ---
+# Paste your GitHub Token inside the quotes below to hardcode it.
+# WARNING: Do not commit this file to a public repo with the token inside.
+HARDCODED_TOKEN = "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"  
 
-HOSTING_KEYWORDS = [
-    'CLOUD', 'VPS', 'HOSTING', 'DATACENTER', 'DIGITALOCEAN', 'AMAZON', 'AWS', 
-    'GOOGLE', 'MICROSOFT', 'AZURE', 'OVH', 'HETZNER', 'ALIBABA', 'TENCENT', 
-    'ORACLE', 'LINODE', 'VULTR', 'LEASEWEB', 'RACKSPACE', 'AKAMAI'
-]
+# Ensure CSV exists
+init_storage()
 
-IP_PATTERN = re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
+st.title("🛡️ Threat Intel Database & Analyzer")
 
-# Define CSV Columns
-CSV_COLUMNS = [
-    'ip_address', 'first_seen', 'last_seen', 'sources', 'asn', 'isp_name', 
-    'country', 'city', 'hostname', 'host_type', 'risk_level', 
-    'abuse_contact', 'cidr', 'asn_registry', 'updated_date'
-]
+# --- Stats Section ---
+total_ips = 0
+recent_ips = 0
+high_risk = 0
 
-# --- Helper: Logging ---
-def log_msg(msg, callback=None):
-    """Sends log to callback if exists, else prints to stdout."""
-    if callback:
-        callback(msg)
-    else:
-        print(msg)
-
-# --- Storage Management (CSV) ---
-
-def init_storage():
-    """Initializes the CSV file if it doesn't exist."""
-    if not os.path.exists(STORAGE_FILE):
-        print(f"[-] Creating new storage file: {STORAGE_FILE}")
-        df = pd.DataFrame(columns=CSV_COLUMNS)
-        df.to_csv(STORAGE_FILE, index=False)
-        
-    # Security: Restrict permissions (Mac/Linux only)
+if os.path.exists(STORAGE_FILE) and os.path.getsize(STORAGE_FILE) > 0:
     try:
-        os.chmod(STORAGE_FILE, stat.S_IRUSR | stat.S_IWUSR)
-    except Exception:
-        pass
-
-def get_existing_ips():
-    """Returns a set of all IPs currently in the CSV."""
-    try:
-        if os.path.exists(STORAGE_FILE) and os.path.getsize(STORAGE_FILE) > 0:
-            # Read only the ip_address column for speed
-            df = pd.read_csv(STORAGE_FILE, usecols=['ip_address'])
-            return set(df['ip_address'].tolist())
+        df_stats = pd.read_csv(STORAGE_FILE, usecols=['ip_address', 'last_seen', 'risk_level'])
+        total_ips = len(df_stats)
+        df_stats['last_seen'] = pd.to_datetime(df_stats['last_seen'], errors='coerce')
+        recent_ips = len(df_stats[df_stats['last_seen'] > (pd.Timestamp.now() - pd.Timedelta(days=1))])
+        high_risk = len(df_stats[
+            df_stats['risk_level'].astype(str).str.contains('High', case=False) | 
+            df_stats['risk_level'].astype(str).str.contains('Critical', case=False)
+        ])
     except Exception as e:
-        print(f"[!] Error reading existing IPs: {e}")
-    return set()
+        st.error(f"Error reading CSV for stats: {e}")
 
-def update_ip_sources(ip, new_sources):
-    """Updates the 'sources' and 'last_seen' for an existing IP."""
-    try:
-        df = pd.read_csv(STORAGE_FILE)
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Unique IPs", total_ips)
+col2.metric("Updated Last 24h", recent_ips)
+col3.metric("High/Critical Risk", high_risk)
+
+# --- Sidebar Configuration ---
+with st.sidebar:
+    st.header("Configuration")
+    
+    with st.expander("⚙️ Settings", expanded=True):
+        worker_threads = st.slider("Worker Threads", 1, 50, 10)
         
-        # Find the row index
-        idx = df.index[df['ip_address'] == ip].tolist()
-        if not idx:
-            return # IP not found
-            
-        idx = idx[0]
-        
-        # Merge sources
-        current_sources_str = str(df.at[idx, 'sources'])
-        if pd.isna(current_sources_str) or current_sources_str == 'nan':
-            current_sources = set()
+        # Token Handling Logic
+        if HARDCODED_TOKEN:
+            os.environ["GITHUB_TOKEN"] = HARDCODED_TOKEN
+            st.success("✅ GitHub Token loaded from script.")
         else:
-            current_sources = set(s.strip() for s in current_sources_str.split(",") if s.strip())
+            gh_token = st.text_input("GitHub Token", type="password", help="Required for Git Push.")
+            if gh_token:
+                os.environ["GITHUB_TOKEN"] = gh_token
+
+    st.divider()
+    st.subheader("⚠️ Danger Zone")
+    
+    with st.expander("Reset Database"):
+        st.warning("This will delete threat_intel.csv.")
+        admin_pass = st.text_input("Enter Admin Password", type="password")
+        
+        if st.button("🗑️ Wipe Data", type="secondary"):
+            SECURE_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+            input_hash = hashlib.sha256(admin_pass.encode()).hexdigest()
             
-        current_sources.update(new_sources)
-        
-        # Update fields
-        df.at[idx, 'sources'] = ", ".join(sorted(current_sources))
-        df.at[idx, 'last_seen'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Save back to CSV
-        df.to_csv(STORAGE_FILE, index=False)
-        
-    except Exception as e:
-        print(f"[!] Error updating IP {ip}: {e}")
+            if input_hash == SECURE_HASH:
+                try:
+                    if os.path.exists(STORAGE_FILE):
+                        os.remove(STORAGE_FILE)
+                        init_storage()
+                        st.success("Storage wiped.")
+                        st.rerun()
+                    else:
+                        st.warning("File not found.")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+            else:
+                st.error("Incorrect Password.")
 
-def insert_new_ip(data, sources):
-    """Appends a new IP record to the CSV."""
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+# --- Manual Run Control ---
+with st.expander("⚙️ Manual Scan Control", expanded=True):
+    st.write("Run the scan logic manually.")
     
-    # Prepare row data matching CSV_COLUMNS
-    row = {
-        'ip_address': data['IP'],
-        'first_seen': now,
-        'last_seen': now,
-        'sources': ", ".join(sorted(sources)),
-        'asn': data.get('ASN'),
-        'isp_name': data.get('ISP_Name'),
-        'country': data.get('Country'),
-        'city': data.get('City'),
-        'hostname': data.get('Hostname'),
-        'host_type': data.get('Host_Type'),
-        'risk_level': data.get('Risk_Level'),
-        'abuse_contact': data.get('Abuse_Contact'),
-        'cidr': data.get('CIDR'),
-        'asn_registry': data.get('ASN_Registry'),
-        'updated_date': data.get('Updated_Date')
-    }
-    
-    # Create a DataFrame for the single row
-    new_df = pd.DataFrame([row])
-    
-    # Append to CSV file
-    # header=False because file already has headers
-    try:
-        new_df.to_csv(STORAGE_FILE, mode='a', header=not os.path.exists(STORAGE_FILE), index=False)
-    except Exception as e:
-        print(f"[!] Error writing to CSV: {e}")
-
-# --- Parsing & Enrichment ---
-
-def sanitize_filename(name):
-    """Sanitizes string to be safe for filenames."""
-    return re.sub(r'[^\w\-_\. ]', '_', name)
-
-def get_daily_raw_path():
-    """Creates and returns the path for today's raw data."""
-    today = datetime.now().strftime('%Y-%m-%d')
-    path = os.path.join(RAW_DATA_DIR, today)
-    if not os.path.exists(path):
-        os.makedirs(path)
-    return path
-
-def fetch_feeds(log_callback=None):
-    """
-    Checks for local raw files for today. 
-    If missing, downloads from source and saves to 'raw_feeds/YYYY-MM-DD/'.
-    Returns dict: {ip: [source1, source2]}
-    """
-    log_msg("[-] Checking/Fetching feeds...", log_callback)
-    aggregated = defaultdict(set)
-    date_path = get_daily_raw_path()
-    
-    for feed in FEEDS:
-        safe_name = sanitize_filename(feed['name'])
-        file_path = os.path.join(date_path, f"{safe_name}.txt")
-        content = ""
+    if st.button("Run Full Scan Now", type="primary"):
         
-        # 1. Try to read from local Git storage first
-        if os.path.exists(file_path):
-            log_msg(f"    [+] Reading cached: {feed['name']}", log_callback)
-            try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-            except Exception as e:
-                log_msg(f"    [!] Error reading cache {file_path}: {e}", log_callback)
-        
-        # 2. Download if not found
-        else:
-            log_msg(f"    [+] Downloading: {feed['name']}...", log_callback)
-            try:
-                r = requests.get(feed['url'], timeout=15)
-                if r.status_code == 200:
-                    content = r.text
-                    # Save raw data for Git history
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write(content)
-                else:
-                    log_msg(f"    [!] Failed to fetch {feed['name']} (Status {r.status_code})", log_callback)
-            except Exception as e:
-                log_msg(f"    [!] Failed to fetch {feed['name']}: {e}", log_callback)
-
-        # 3. Parse IPs from content
-        if content:
-            ips = set(IP_PATTERN.findall(content))
-            for ip in ips:
-                if not ip.startswith(('127.', '10.', '192.168.')): 
-                    aggregated[ip].add(feed['name'])
+        # --- UI Logging Setup ---
+        log_container = st.container()
+        with log_container:
+            st.markdown("### Live Execution Log")
+            status_text = st.empty()
+            log_history_box = st.empty()
             
-    return aggregated
-
-def enrich_ip(ip):
-    """Deep Forensic Analysis (Whois + RDAP + Reverse DNS)."""
-    data = {
-        'IP': ip, 
-        'ASN': 'Unknown', 'ISP_Name': 'Unknown', 'Country': 'XX',
-        'City': 'Unknown', 'Hostname': 'Unknown', 'Abuse_Contact': 'Unknown', 
-        'Host_Type': 'Unknown', 'CIDR': 'Unknown', 'ASN_Registry': 'Unknown',
-        'Updated_Date': 'Unknown', 'Risk_Level': 'Unknown'
-    }
-    
-    # 1. Reverse DNS
-    try:
-        socket.setdefaulttimeout(2)
-        data['Hostname'] = socket.gethostbyaddr(ip)[0]
-    except Exception:
-        pass
-
-    # 2. RDAP/Whois
-    try:
-        obj = IPWhois(ip)
-        res = obj.lookup_rdap(depth=1, retry_count=1)
+        log_history = []
         
-        data['ASN'] = res.get('asn', 'Unknown')
-        data['ISP_Name'] = res.get('asn_description', 'Unknown')
-        data['Country'] = res.get('asn_country_code', 'XX')
-        data['ASN_Registry'] = res.get('asn_registry', 'Unknown')
-        
-        network = res.get('network', {})
-        data['CIDR'] = network.get('cidr', 'Unknown')
-        data['Updated_Date'] = network.get('updated', 'Unknown')
-        data['City'] = network.get('city', 'Unknown')
+        def ui_logger(msg):
+            """Callback passed to threat_utils to update UI."""
+            if "Analyzing:" in msg or "ETA:" in msg:
+                status_text.markdown(f"`{msg}`")
+            else:
+                log_history.append(msg)
+                # Keep last 15 lines for context
+                log_history_box.code("\n".join(log_history[-15:]))
 
-        objects = res.get('objects', {})
-        for _, val in objects.items():
-            contact = val.get('contact', {})
-            if 'abuse' in val.get('roles', []) or 'abuse' in str(contact).lower():
-                emails = contact.get('email')
-                if emails:
-                    data['Abuse_Contact'] = emails[0].get('value')
-                    break
+        # --- Execution ---
+        with st.spinner("Running Scan... Check logs below."):
+            # 1. Fetch
+            aggregated_data = fetch_feeds(log_callback=ui_logger)
+            ui_logger(f"Total unique IPs found: {len(aggregated_data)}")
+            
+            # 2. Identify New vs Old
+            existing_ips = get_existing_ips()
+            new_ips = [ip for ip in aggregated_data if ip not in existing_ips]
+            old_ips = [ip for ip in aggregated_data if ip in existing_ips]
+            
+            ui_logger(f"New IPs to Analyze: {len(new_ips)}")
+            ui_logger(f"Existing IPs to Update: {len(old_ips)}")
+            
+            # 3. Update Old
+            if old_ips:
+                ui_logger("Updating existing records...")
+                progress_bar_old = st.progress(0)
+                for i, ip in enumerate(old_ips):
+                    update_ip_sources(ip, aggregated_data[ip])
+                    if i % 50 == 0: 
+                        progress_bar_old.progress(min((i + 1) / len(old_ips), 1.0))
+                progress_bar_old.empty()
+                
+            # 4. Analyze New
+            if new_ips:
+                CHUNK_SIZE = 100
+                total_chunks = (len(new_ips) // CHUNK_SIZE) + 1
+                
+                for i in range(0, len(new_ips), CHUNK_SIZE):
+                    chunk = new_ips[i : i + CHUNK_SIZE]
+                    ui_logger(f"Processing Batch {i}-{min(i+len(chunk), len(new_ips))}...")
                     
-    except Exception:
-        pass
+                    # Run analysis on this chunk
+                    run_forensic_analysis(chunk, aggregated_data, batch_size=10, sleep_time=1, log_callback=ui_logger)
+                    
+                    # Commit this chunk
+                    ui_logger(f"Committing batch results to GitHub...")
+                    git_msg = export_to_github_repo()
+                    ui_logger(f"GitHub: {git_msg}")
 
-    # 3. Heuristics
-    isp_upper = str(data['ISP_Name']).upper()
-    host_upper = str(data['Hostname']).upper()
+            ui_logger("Scan Complete.")
+            st.success("Scan Finished Successfully.")
+
+# --- Data Viewer ---
+st.divider()
+st.subheader("🔍 Forensic Data Explorer")
+
+if os.path.exists(STORAGE_FILE) and os.path.getsize(STORAGE_FILE) > 0:
+    # Load Data
+    df = pd.read_csv(STORAGE_FILE)
     
-    if any(k in isp_upper or k in host_upper for k in HOSTING_KEYWORDS):
-        data['Host_Type'] = 'Cloud/Hosting'
-        data['Risk_Level'] = 'High (Cloud)'
-    else:
-        data['Host_Type'] = 'Residential/ISP'
-        data['Risk_Level'] = 'Moderate (Res)'
-        
-    return data
+    # Filters
+    col_search, col_filter = st.columns([3, 1])
+    with col_search:
+        search_term = st.text_input("Search")
+    with col_filter:
+        risk_filter = st.selectbox("Filter by Risk", ["All", "High", "Moderate", "Low"])
 
-def process_in_batches(ip_list, batch_size=10, sleep_time=2):
-    """Generator that yields batches and sleeps to respect rate limits."""
-    total = len(ip_list)
-    for i in range(0, total, batch_size):
-        batch = ip_list[i:i + batch_size]
-        yield batch
-        if i + batch_size < total:
-            time.sleep(sleep_time)
-
-def run_forensic_analysis(new_ips, aggregated_data, batch_size=10, sleep_time=2, log_callback=None):
-    """Runs enrichment and appends to CSV with live status."""
-    total_ips = len(new_ips)
-    if total_ips == 0:
-        log_msg("[-] No new IPs to analyze.", log_callback)
-        return
-
-    log_msg(f"[*] Starting forensic analysis for {total_ips} IPs...", log_callback)
-    start_time = time.time()
-    processed_count = 0
-
-    for batch in process_in_batches(new_ips, batch_size, sleep_time):
-        for ip in batch:
-            # Calculate ETA
-            elapsed_time = time.time() - start_time
-            if processed_count > 0:
-                avg_time = elapsed_time / processed_count
-                remaining = total_ips - processed_count
-                eta_seconds = int(avg_time * remaining)
-                eta_str = str(datetime.utcfromtimestamp(eta_seconds).strftime('%H:%M:%S'))
-            else:
-                eta_str = "Calculating..."
-
-            status_msg = (
-                f"    -> Analyzing: {ip:<15} | "
-                f"Left: {total_ips - processed_count:<5} | "
-                f"ETA: {eta_str}   "
-            )
-            
-            # For UI, we pass this status message
-            if log_callback:
-                log_callback(status_msg)
-            else:
-                sys.stdout.write("\r" + status_msg)
-                sys.stdout.flush()
-
-            try:
-                enriched = enrich_ip(ip)
-                insert_new_ip(enriched, aggregated_data[ip])
-            except Exception as e:
-                err_msg = f"\n[!] Error processing {ip}: {e}\n"
-                log_msg(err_msg, log_callback)
-
-            processed_count += 1
+    # Apply Search
+    if search_term:
+        df = df[
+            df.astype(str).apply(lambda x: x.str.contains(search_term, case=False)).any(axis=1)
+        ]
     
-    total_time = time.time() - start_time
-    log_msg(f"\n[+] Analysis complete. Total run time: {str(datetime.utcfromtimestamp(total_time).strftime('%H:%M:%S'))}", log_callback)
+    if risk_filter != "All":
+        df = df[df['risk_level'].astype(str).str.contains(risk_filter, case=False)]
 
-def export_to_github_repo(log_callback=None):
-    """Commits the storage CSV and Raw Data folder to Git with Authentication handling."""
+    # Dynamic Source Counts
+    df['Source_Count'] = df['sources'].astype(str).apply(lambda x: len(x.split(',')) if x != 'nan' else 0)
     
-    # We are now using the main STORAGE_FILE as the primary record
-    if not os.path.exists(STORAGE_FILE):
-        return "No CSV file found."
+    # Display
+    st.dataframe(
+        df.style.applymap(
+            lambda x: 'background-color: #ffcdd2' if 'High' in str(x) else '',
+            subset=['risk_level']
+        ),
+        use_container_width=True
+    )
     
-    try:
-        repo = Repo('.') 
-        
-        # Configure Git user if not set (for headless environments)
-        with repo.config_writer() as git_config:
-            if not git_config.has_option('user', 'email'):
-                git_config.set_value('user', 'email', 'automated@threatintel.app')
-                git_config.set_value('user', 'name', 'Threat Intel Bot')
-
-        # 1. Add Main CSV
-        repo.git.add(STORAGE_FILE)
-        
-        # 2. Add Raw Data Folder (recursively)
-        if os.path.exists(RAW_DATA_DIR):
-            repo.git.add(RAW_DATA_DIR)
-        
-        today = datetime.now().strftime('%Y-%m-%d')
-        
-        # 3. Commit (Try/Except to handle 'nothing to commit')
-        try:
-            repo.git.commit('-m', f"Daily Threat Intel Update (CSV & Raw): {today}")
-        except GitCommandError as e:
-            if 'nothing to commit' in str(e):
-                return "No new changes to commit."
-            raise e
-            
-        # 4. Push to remote with Authentication
-        origin = repo.remotes.origin
-        
-        # Check for GITHUB_TOKEN env var
-        github_token = os.environ.get('GITHUB_TOKEN')
-        
-        if github_token:
-            current_url = origin.url
-            if "https://" in current_url and "@" not in current_url:
-                auth_url = current_url.replace("https://", f"https://{github_token}@")
-                origin.set_url(auth_url)
-        
-        origin.push()
-        return f"Committed and Pushed {STORAGE_FILE} and raw data to Git."
-            
-    except Exception as e:
-        return f"Git Operation failed: {e}"
+    st.download_button(
+        label="📥 Download CSV",
+        data=df.to_csv(index=False).encode('utf-8'),
+        file_name="threat_intel_export.csv",
+        mime="text/csv"
+    )
+else:
+    st.info("Database is empty.")
