@@ -80,3 +80,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 23.91.96.70,2025-11-26 10:50:45,2025-11-26 10:50:45,"GreenSnow, IPSum Level 3",135377,"UCLOUD-HK-AS-AP UCLOUD INFORMATION TECHNOLOGY HK LIMITED, HK",US,Unknown,Unknown,Cloud/Hosting,High (Cloud),unoc@ucloud.cn,23.91.96.0/24,arin,Unknown
 60.171.154.168,2025-11-26 10:50:46,2025-11-26 10:50:46,GreenSnow,4134,"CHINANET-BACKBONE No.31,Jin-rong Street, CN",CN,Unknown,Unknown,Residential/ISP,Moderate (Res),anti-spam@chinatelecom.cn,"60.166.0.0/15, 60.168.0.0/13",apnic,Unknown
 81.88.53.43,2025-11-26 10:50:51,2025-11-26 10:50:51,"GreenSnow, IPSum Level 3",39729,"REGISTER-AS, IT",IT,Unknown,lhwp3293.webapps.net,Residential/ISP,Moderate (Res),abuse@register.it,81.88.52.0/23,ripencc,Unknown
+96.78.175.45,2025-11-26 10:50:52,2025-11-26 10:50:52,"GreenSnow, IPSum Level 3",7922,"COMCAST-7922, US",US,Unknown,Unknown,Residential/ISP,Moderate (Res),abuse@comcast.net,96.78.128.0/18,arin,Unknown
