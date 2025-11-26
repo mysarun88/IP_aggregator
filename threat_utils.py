@@ -13,6 +13,7 @@ from git import Repo, GitCommandError
 
 # --- Configuration ---
 STORAGE_FILE = "threat_intel.csv"
+RAW_DATA_DIR = "raw_feeds" # Directory for raw daily downloads
 DATA_DIR = "data_exports" 
 
 # Expanded Feed List
@@ -136,21 +137,63 @@ def insert_new_ip(data, sources):
 
 # --- Parsing & Enrichment ---
 
+def sanitize_filename(name):
+    """Sanitizes string to be safe for filenames."""
+    return re.sub(r'[^\w\-_\. ]', '_', name)
+
+def get_daily_raw_path():
+    """Creates and returns the path for today's raw data."""
+    today = datetime.now().strftime('%Y-%m-%d')
+    path = os.path.join(RAW_DATA_DIR, today)
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return path
+
 def fetch_feeds():
-    """Downloads all feeds and returns a dict: {ip: [source1, source2]}"""
-    print("[-] Fetching feeds...")
+    """
+    Checks for local raw files for today. 
+    If missing, downloads from source and saves to 'raw_feeds/YYYY-MM-DD/'.
+    Returns dict: {ip: [source1, source2]}
+    """
+    print("[-] Checking/Fetching feeds...")
     aggregated = defaultdict(set)
+    date_path = get_daily_raw_path()
     
     for feed in FEEDS:
-        try:
-            r = requests.get(feed['url'], timeout=10)
-            if r.status_code == 200:
-                ips = set(IP_PATTERN.findall(r.text))
-                for ip in ips:
-                    if not ip.startswith(('127.', '10.', '192.168.')): 
-                        aggregated[ip].add(feed['name'])
-        except Exception as e:
-            print(f"    [!] Failed to fetch {feed['name']}: {e}")
+        safe_name = sanitize_filename(feed['name'])
+        file_path = os.path.join(date_path, f"{safe_name}.txt")
+        content = ""
+        
+        # 1. Try to read from local Git storage first
+        if os.path.exists(file_path):
+            print(f"    [+] Reading cached: {feed['name']}")
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+            except Exception as e:
+                print(f"    [!] Error reading cache {file_path}: {e}")
+        
+        # 2. Download if not found
+        else:
+            print(f"    [+] Downloading: {feed['name']}...")
+            try:
+                r = requests.get(feed['url'], timeout=15)
+                if r.status_code == 200:
+                    content = r.text
+                    # Save raw data for Git history
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                else:
+                    print(f"    [!] Failed to fetch {feed['name']} (Status {r.status_code})")
+            except Exception as e:
+                print(f"    [!] Failed to fetch {feed['name']}: {e}")
+
+        # 3. Parse IPs from content
+        if content:
+            ips = set(IP_PATTERN.findall(content))
+            for ip in ips:
+                if not ip.startswith(('127.', '10.', '192.168.')): 
+                    aggregated[ip].add(feed['name'])
             
     return aggregated
 
@@ -263,7 +306,7 @@ def run_forensic_analysis(new_ips, aggregated_data, batch_size=10, sleep_time=2)
     print(f"\n[+] Analysis complete. Total run time: {str(datetime.utcfromtimestamp(total_time).strftime('%H:%M:%S'))}")
 
 def export_to_github_repo():
-    """Commits the storage CSV to Git with Authentication handling."""
+    """Commits the storage CSV and Raw Data folder to Git with Authentication handling."""
     
     # We are now using the main STORAGE_FILE as the primary record
     if not os.path.exists(STORAGE_FILE):
@@ -275,25 +318,33 @@ def export_to_github_repo():
         # Add the main CSV file
         repo.index.add([STORAGE_FILE])
         
+        # Add the raw data folder
+        if os.path.exists(RAW_DATA_DIR):
+            repo.git.add(RAW_DATA_DIR)
+        
         today = datetime.now().strftime('%Y-%m-%d')
-        repo.index.commit(f"Daily Threat Intel Update (CSV): {today}")
-        
-        # Pushing changes to remote with Authentication
-        origin = repo.remotes.origin
-        
-        # Check for GITHUB_TOKEN env var (Used in Streamlit Cloud Secrets / Actions)
-        github_token = os.environ.get('GITHUB_TOKEN')
-        
-        if github_token:
-            # Construct Authenticated URL: https://<TOKEN>@github.com/user/repo.git
-            # This avoids the interactive password prompt
-            current_url = origin.url
-            if "https://" in current_url and "@" not in current_url:
-                auth_url = current_url.replace("https://", f"https://{github_token}@")
-                origin.set_url(auth_url)
-        
-        origin.push()
-        
-        return f"Committed and Pushed {STORAGE_FILE} to Git."
+        # Check if there are changes to commit
+        if repo.is_dirty(untracked_files=True):
+            repo.index.commit(f"Daily Threat Intel Update (CSV & Raw): {today}")
+            
+            # Pushing changes to remote with Authentication
+            origin = repo.remotes.origin
+            
+            # Check for GITHUB_TOKEN env var (Used in Streamlit Cloud Secrets / Actions)
+            github_token = os.environ.get('GITHUB_TOKEN')
+            
+            if github_token:
+                # Construct Authenticated URL: https://<TOKEN>@github.com/user/repo.git
+                # This avoids the interactive password prompt
+                current_url = origin.url
+                if "https://" in current_url and "@" not in current_url:
+                    auth_url = current_url.replace("https://", f"https://{github_token}@")
+                    origin.set_url(auth_url)
+            
+            origin.push()
+            return f"Committed and Pushed {STORAGE_FILE} and raw data to Git."
+        else:
+            return "No changes to commit."
+            
     except Exception as e:
         return f"Git Operation failed: {e}"
