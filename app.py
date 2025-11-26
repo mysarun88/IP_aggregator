@@ -60,8 +60,8 @@ with st.sidebar:
     st.header("Configuration")
     
     with st.expander("⚙️ Settings"):
-        max_ips = st.slider("Analysis Limit (Manual)", 10, 10000, 10000)
-        worker_threads = st.slider("Worker Threads", 1, 30, 15)
+        # Removed max_ips slider to allow unlimited scanning
+        worker_threads = st.slider("Worker Threads", 1, 50, 10) # Default set to 10
 
     st.divider()
     st.subheader("⚠️ Danger Zone")
@@ -128,6 +128,7 @@ with st.expander("⚙️ Manual Scan Control"):
             processed_count = 0
             
             # Using the batch processor from utils to respect rate limits
+            # Processing all new IPs without limit
             for batch in process_in_batches(new_ips, batch_size=10, sleep_time=1):
                 for ip in batch:
                     try:
@@ -178,9 +179,60 @@ query += " ORDER BY last_seen DESC LIMIT 1000"
 # Execute Query
 conn = sqlite3.connect(DB_FILE)
 df = pd.read_sql_query(query, conn, params=params)
+
+if not df.empty:
+    # --- Fetch Detailed Sightings for Pivot ---
+    ip_list = df['ip_address'].tolist()
+    
+    if ip_list:
+        try:
+            # Create parameters string for IN clause
+            placeholders = ','.join(['?'] * len(ip_list))
+            
+            # Pivot Query: Get max sighted_at for each source/ip pair
+            sighting_query = f"""
+                SELECT ip_address, source_feed, MAX(sighted_at) as last_seen_source
+                FROM sightings
+                WHERE ip_address IN ({placeholders})
+                GROUP BY ip_address, source_feed
+            """
+            
+            sightings_df = pd.read_sql_query(sighting_query, conn, params=ip_list)
+            
+            if not sightings_df.empty:
+                # Pivot: IP (rows) x Source (cols) = Last Seen Time
+                pivot_df = sightings_df.pivot(index='ip_address', columns='source_feed', values='last_seen_source')
+                
+                # Calculate Source Count (Number of feeds containing this IP)
+                pivot_df['Source_Count'] = pivot_df.notna().sum(axis=1)
+                
+                # Merge Pivot data back into main DF
+                df = pd.merge(df, pivot_df, on='ip_address', how='left')
+                
+                # Fill NaN in Source_Count with 0 (for consistency)
+                df['Source_Count'] = df['Source_Count'].fillna(0).astype(int)
+                
+        except Exception as e:
+            st.error(f"Error generating source breakdown: {e}")
+
 conn.close()
 
 if not df.empty:
+    # Reorder Columns for readability
+    # Prioritize: IP, Source Count, Risk, Country... then dynamic Source columns
+    core_cols = ['ip_address', 'Source_Count', 'risk_level', 'country', 'isp_name', 'host_type', 'last_seen']
+    
+    # Find which columns from core_cols actually exist in df
+    available_core = [c for c in core_cols if c in df.columns]
+    
+    # Get all other columns (including the dynamic feed names)
+    # Removed exclusion for 'sources' so it appears in the table
+    other_cols = [c for c in df.columns if c not in available_core] 
+    
+    # Combine
+    final_cols = available_core + other_cols
+    df = df[final_cols]
+
     # Formatting for display
     st.dataframe(
         df.style.applymap(
