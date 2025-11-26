@@ -83,3 +83,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 96.78.175.45,2025-11-26 10:50:52,2025-11-26 10:50:52,"GreenSnow, IPSum Level 3",7922,"COMCAST-7922, US",US,Unknown,Unknown,Residential/ISP,Moderate (Res),abuse@comcast.net,96.78.128.0/18,arin,Unknown
 117.50.73.90,2025-11-26 10:50:54,2025-11-26 10:50:54,"GreenSnow, IPSum Level 3",4808 23724,,CN,Unknown,Unknown,Residential/ISP,Moderate (Res),jacky.jia@ucloud.cn,117.50.0.0/16,apnic,Unknown
 103.253.27.139,2025-11-26 10:50:55,2025-11-26 10:50:55,GreenSnow,133210,"ENTECHNOLOGIES-AS-AP EN Technologies Pte Ltd, SG",SG,Unknown,fsutil-set-out.rapidgalery.com,Residential/ISP,Moderate (Res),abuse@axgn.com.sg,103.253.24.0/22,apnic,Unknown
+196.0.120.211,2025-11-26 10:51:08,2025-11-26 10:51:08,"GreenSnow, IPSum Level 3",21491,"UGANDA-TELECOM Uganda Telecom, UG",UG,Unknown,Unknown,Residential/ISP,Moderate (Res),Unknown,196.0.0.0/16,afrinic,Unknown
