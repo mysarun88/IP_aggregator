@@ -315,36 +315,43 @@ def export_to_github_repo():
     try:
         repo = Repo('.') 
         
-        # Add the main CSV file
-        repo.index.add([STORAGE_FILE])
+        # Configure Git user if not set (for headless environments)
+        with repo.config_writer() as git_config:
+            if not git_config.has_option('user', 'email'):
+                git_config.set_value('user', 'email', 'automated@threatintel.app')
+                git_config.set_value('user', 'name', 'Threat Intel Bot')
+
+        # 1. Add Main CSV
+        repo.git.add(STORAGE_FILE)
         
-        # Add the raw data folder
+        # 2. Add Raw Data Folder (recursively)
         if os.path.exists(RAW_DATA_DIR):
             repo.git.add(RAW_DATA_DIR)
         
         today = datetime.now().strftime('%Y-%m-%d')
-        # Check if there are changes to commit
-        if repo.is_dirty(untracked_files=True):
-            repo.index.commit(f"Daily Threat Intel Update (CSV & Raw): {today}")
+        
+        # 3. Commit (Try/Except to handle 'nothing to commit')
+        try:
+            repo.git.commit('-m', f"Daily Threat Intel Update (CSV & Raw): {today}")
+        except GitCommandError as e:
+            if 'nothing to commit' in str(e):
+                return "No new changes to commit."
+            raise e
             
-            # Pushing changes to remote with Authentication
-            origin = repo.remotes.origin
-            
-            # Check for GITHUB_TOKEN env var (Used in Streamlit Cloud Secrets / Actions)
-            github_token = os.environ.get('GITHUB_TOKEN')
-            
-            if github_token:
-                # Construct Authenticated URL: https://<TOKEN>@github.com/user/repo.git
-                # This avoids the interactive password prompt
-                current_url = origin.url
-                if "https://" in current_url and "@" not in current_url:
-                    auth_url = current_url.replace("https://", f"https://{github_token}@")
-                    origin.set_url(auth_url)
-            
-            origin.push()
-            return f"Committed and Pushed {STORAGE_FILE} and raw data to Git."
-        else:
-            return "No changes to commit."
+        # 4. Push to remote with Authentication
+        origin = repo.remotes.origin
+        
+        # Check for GITHUB_TOKEN env var
+        github_token = os.environ.get('GITHUB_TOKEN')
+        
+        if github_token:
+            current_url = origin.url
+            if "https://" in current_url and "@" not in current_url:
+                auth_url = current_url.replace("https://", f"https://{github_token}@")
+                origin.set_url(auth_url)
+        
+        origin.push()
+        return f"Committed and Pushed {STORAGE_FILE} and raw data to Git."
             
     except Exception as e:
         return f"Git Operation failed: {e}"
