@@ -159,3 +159,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 14.103.114.231,2025-11-27 13:46:04,2025-11-27 13:46:04,"GreenSnow, IPSum Level 3",4811 137718,,CN,Unknown,Unknown,Residential/ISP,Moderate (Res),gnoc@bytedance.com,14.103.0.0/16,apnic,Unknown
 101.47.142.98,2025-11-27 13:46:12,2025-11-27 13:46:12,"GreenSnow, IPSum Level 3",150436,"BYTEPLUS-AS-AP Byteplus Pte. Ltd., SG",SG,Unknown,Unknown,Residential/ISP,Moderate (Res),bd_abuse@bytedance.com,"101.47.112.0/20, 101.47.128.0/17",apnic,Unknown
 154.53.62.61,2025-11-27 13:46:22,2025-11-27 13:46:22,"GreenSnow, IPSum Level 3",40021,"CONTABO-40021, US",US,Unknown,vmi1548620.contaboserver.net,Residential/ISP,Moderate (Res),abuse@cogentco.com,154.53.0.0/16,arin,Unknown
+185.17.41.205,2025-11-27 13:46:32,2025-11-27 13:46:32,GreenSnow,197155,"ARTNET, PL",PL,Unknown,da04.vipower.pl,Residential/ISP,Moderate (Res),abuse@artnet.pl,185.17.41.0/24,ripencc,Unknown
