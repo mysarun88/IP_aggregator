@@ -94,3 +94,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 5.182.33.212,2025-11-27 13:35:16,2025-11-27 13:35:16,GreenSnow,51167,"CONTABO, DE",DE,Unknown,f31.eelserver.com,Residential/ISP,Moderate (Res),abuse@contabo.de,5.182.33.0/24,ripencc,Unknown
 220.81.215.178,2025-11-27 13:35:28,2025-11-27 13:35:28,GreenSnow,4766,"KIXS-AS-KR Korea Telecom, KR",KR,Unknown,Unknown,Residential/ISP,Moderate (Res),hostmaster@nic.or.kr,220.80.0.0/13,apnic,Unknown
 190.108.79.128,2025-11-27 13:35:32,2025-11-27 13:35:32,"GreenSnow, IPSum Level 3",270035,"CELSIA COLOMBIA S.A. E.S.P., CO",CO,Unknown,gpon-190.108.79.128-celsiainternet.com,Residential/ISP,Moderate (Res),abuse@celsiainternet.com,190.108.76.0/22,lacnic,Unknown
+8.219.222.194,2025-11-27 13:35:40,2025-11-27 13:35:40,GreenSnow,45102,"ALIBABA-CN-NET Alibaba US Technology Co., Ltd., CN",SG,Unknown,Unknown,Cloud/Hosting,High (Cloud),abuse@alibaba-inc.com,8.208.0.0/12,apnic,Unknown
