@@ -188,3 +188,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 34.69.0.72,2025-11-27 13:51:18,2025-11-27 13:51:18,"GreenSnow, IPSum Level 3",396982,"GOOGLE-CLOUD-PLATFORM, US",US,Unknown,72.0.69.34.bc.googleusercontent.com,Cloud/Hosting,High (Cloud),google-cloud-compliance@google.com,34.64.0.0/10,arin,Unknown
 84.239.47.137,2025-11-27 13:51:27,2025-11-27 13:51:27,GreenSnow,212238,"CDNEXT, GB",RO,Unknown,Unknown,Residential/ISP,Moderate (Res),abuse@invitesys.ro,84.239.47.128/25,ripencc,Unknown
 8.210.124.41,2025-11-27 13:51:34,2025-11-27 13:51:34,GreenSnow,45102,"ALIBABA-CN-NET Alibaba US Technology Co., Ltd., CN",SG,Unknown,Unknown,Cloud/Hosting,High (Cloud),abuse@alibaba-inc.com,8.210.0.0/16,apnic,Unknown
+47.253.133.176,2025-11-27 13:51:43,2025-11-27 13:51:43,GreenSnow,45102,"ALIBABA-CN-NET Alibaba US Technology Co., Ltd., CN",US,Unknown,Unknown,Cloud/Hosting,High (Cloud),Unknown,47.253.0.0/16,arin,Unknown
