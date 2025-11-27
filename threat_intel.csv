@@ -116,3 +116,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 188.130.238.85,2025-11-27 13:39:05,2025-11-27 13:39:05,"GreenSnow, IPSum Level 3",215670,"FIRSTPAGE-AS, KZ",CZ,Unknown,Unknown,Residential/ISP,Moderate (Res),abuse@firstpage.kz,188.130.238.0/24,ripencc,Unknown
 194.180.49.170,2025-11-27 13:39:14,2025-11-27 13:39:14,"GreenSnow, IPSum Level 3",201814,"MEVSPACE, PL",BG,Unknown,Unknown,Residential/ISP,Moderate (Res),abuse@razinetwork.com,194.180.49.0/24,ripencc,Unknown
 115.91.91.182,2025-11-27 13:39:24,2025-11-27 13:39:24,"GreenSnow, IPSum Level 3",3786,"LGDACOM LG DACOM Corporation, KR",KR,Unknown,Unknown,Residential/ISP,Moderate (Res),hostmaster@nic.or.kr,115.88.0.0/13,apnic,Unknown
+103.190.214.241,2025-11-27 13:39:38,2025-11-27 13:39:38,"GreenSnow, IPSum Level 3",38513,"LINTASARTA-AS-ID PT Aplikanusa Lintasarta, ID",ID,Unknown,Unknown,Residential/ISP,Moderate (Res),abuse@idnic.net,103.190.214.0/24,apnic,Unknown
