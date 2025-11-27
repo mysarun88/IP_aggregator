@@ -115,3 +115,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 62.173.38.229,2025-11-27 13:38:56,2025-11-27 13:38:56,"GreenSnow, IPSum Level 3",29091,"IPNXng, NG",NG,Unknown,62-173-38-229.rv.ipnxtelecoms.com,Residential/ISP,Moderate (Res),Unknown,"62.173.32.0/21, 62.173.40.0/23",afrinic,Unknown
 188.130.238.85,2025-11-27 13:39:05,2025-11-27 13:39:05,"GreenSnow, IPSum Level 3",215670,"FIRSTPAGE-AS, KZ",CZ,Unknown,Unknown,Residential/ISP,Moderate (Res),abuse@firstpage.kz,188.130.238.0/24,ripencc,Unknown
 194.180.49.170,2025-11-27 13:39:14,2025-11-27 13:39:14,"GreenSnow, IPSum Level 3",201814,"MEVSPACE, PL",BG,Unknown,Unknown,Residential/ISP,Moderate (Res),abuse@razinetwork.com,194.180.49.0/24,ripencc,Unknown
+115.91.91.182,2025-11-27 13:39:24,2025-11-27 13:39:24,"GreenSnow, IPSum Level 3",3786,"LGDACOM LG DACOM Corporation, KR",KR,Unknown,Unknown,Residential/ISP,Moderate (Res),hostmaster@nic.or.kr,115.88.0.0/13,apnic,Unknown
