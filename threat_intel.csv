@@ -229,3 +229,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 8.219.152.209,2025-11-27 13:57:53,2025-11-27 13:57:53,"GreenSnow, IPSum Level 3",45102,"ALIBABA-CN-NET Alibaba US Technology Co., Ltd., CN",SG,Unknown,Unknown,Cloud/Hosting,High (Cloud),abuse@alibaba-inc.com,8.208.0.0/12,apnic,Unknown
 47.254.65.238,2025-11-27 13:58:03,2025-11-27 13:58:03,GreenSnow,45102,"ALIBABA-CN-NET Alibaba US Technology Co., Ltd., CN",US,Unknown,Unknown,Cloud/Hosting,High (Cloud),Unknown,47.254.0.0/17,arin,Unknown
 154.47.31.5,2025-11-27 13:58:12,2025-11-27 13:58:12,"GreenSnow, IPSum Level 3",212238,"CDNEXT, GB",US,Unknown,unn-154-47-31-5.datapacket.com,Residential/ISP,Moderate (Res),Unknown,154.47.31.0/24,arin,Unknown
+8.222.138.250,2025-11-27 13:58:20,2025-11-27 13:58:20,GreenSnow,45102,"ALIBABA-CN-NET Alibaba US Technology Co., Ltd., CN",SG,Unknown,Unknown,Cloud/Hosting,High (Cloud),abuse@alibaba-inc.com,8.208.0.0/12,apnic,Unknown
