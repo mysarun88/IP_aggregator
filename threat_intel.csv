@@ -100,3 +100,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 162.241.217.42,2025-11-27 13:36:14,2025-11-27 13:36:14,GreenSnow,31898,"ORACLE-BMC-31898, US",US,Unknown,box5455.bluehost.com,Cloud/Hosting,High (Cloud),IARPOC@Newfold.com,162.240.0.0/15,arin,Unknown
 14.103.127.231,2025-11-27 13:36:28,2025-11-27 13:36:28,"GreenSnow, IPSum Level 3",4811 137718,,CN,Unknown,Unknown,Residential/ISP,Moderate (Res),gnoc@bytedance.com,14.103.0.0/16,apnic,Unknown
 14.103.207.251,2025-11-27 13:36:41,2025-11-27 13:36:41,"GreenSnow, IPSum Level 3",4811 137718,,CN,Unknown,Unknown,Residential/ISP,Moderate (Res),gnoc@bytedance.com,14.103.0.0/16,apnic,Unknown
+47.80.1.149,2025-11-27 13:36:53,2025-11-27 13:36:53,"GreenSnow, IPSum Level 3",45102,"ALIBABA-CN-NET Alibaba US Technology Co., Ltd., CN",US,Unknown,Unknown,Cloud/Hosting,High (Cloud),intl-abuse@list.alibaba-inc.com,"47.74.0.0/15, 47.76.0.0/14, 47.80.0.0/13",arin,Unknown
