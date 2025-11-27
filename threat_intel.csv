@@ -173,3 +173,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 103.106.194.74,2025-11-27 13:48:42,2025-11-27 13:48:42,"GreenSnow, IPSum Level 3",134319,"ELYZIUM-AS Elyzium Technologies Pvt. Ltd., IN",IN,Unknown,portal.checkboxtechnology.com,Residential/ISP,Moderate (Res),nitin@elyziumconsulting.com,103.106.192.0/22,apnic,Unknown
 79.110.54.102,2025-11-27 13:48:51,2025-11-27 13:48:51,"GreenSnow, IPSum Level 3",9009,"M247, RO",RO,Unknown,Unknown,Residential/ISP,Moderate (Res),abuse@m247.ro,79.110.54.0/24,ripencc,Unknown
 14.103.74.80,2025-11-27 13:49:04,2025-11-27 13:49:04,"GreenSnow, IPSum Level 3",4811 137718,,CN,Unknown,Unknown,Residential/ISP,Moderate (Res),gnoc@bytedance.com,14.103.0.0/16,apnic,Unknown
+8.210.139.106,2025-11-27 13:49:12,2025-11-27 13:49:12,GreenSnow,45102,"ALIBABA-CN-NET Alibaba US Technology Co., Ltd., CN",SG,Unknown,Unknown,Cloud/Hosting,High (Cloud),abuse@alibaba-inc.com,8.210.0.0/16,apnic,Unknown
