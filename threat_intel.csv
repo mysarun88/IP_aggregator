@@ -101,3 +101,4 @@ ip_address,first_seen,last_seen,sources,asn,isp_name,country,city,hostname,host_
 14.103.127.231,2025-11-27 13:36:28,2025-11-27 13:36:28,"GreenSnow, IPSum Level 3",4811 137718,,CN,Unknown,Unknown,Residential/ISP,Moderate (Res),gnoc@bytedance.com,14.103.0.0/16,apnic,Unknown
 14.103.207.251,2025-11-27 13:36:41,2025-11-27 13:36:41,"GreenSnow, IPSum Level 3",4811 137718,,CN,Unknown,Unknown,Residential/ISP,Moderate (Res),gnoc@bytedance.com,14.103.0.0/16,apnic,Unknown
 47.80.1.149,2025-11-27 13:36:53,2025-11-27 13:36:53,"GreenSnow, IPSum Level 3",45102,"ALIBABA-CN-NET Alibaba US Technology Co., Ltd., CN",US,Unknown,Unknown,Cloud/Hosting,High (Cloud),intl-abuse@list.alibaba-inc.com,"47.74.0.0/15, 47.76.0.0/14, 47.80.0.0/13",arin,Unknown
+190.189.123.14,2025-11-27 13:37:02,2025-11-27 13:37:02,"GreenSnow, IPSum Level 3",7303,"Telecom Argentina S.A., AR",AR,Unknown,14-123-189-190.cab.prima.net.ar,Residential/ISP,Moderate (Res),abuse@teco.com.ar,190.188.0.0/15,lacnic,Unknown
